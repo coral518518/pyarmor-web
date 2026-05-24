@@ -707,25 +707,39 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
         @media (max-width: 640px) {
             body {
-                padding: 1.5rem 1rem;
+                padding: 1rem 0.75rem;
             }
             .app-header h1 {
-                font-size: 2rem;
+                font-size: 1.8rem;
+            }
+            .app-header p {
+                font-size: 0.95rem;
             }
             .main-card {
-                padding: 1.25rem;
+                padding: 1rem;
+                border-radius: 16px;
             }
             .editor-header {
                 flex-direction: column;
-                align-items: flex-start;
+                align-items: stretch;
+                gap: 0.75rem;
             }
             .btn-group {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.5rem;
                 width: 100%;
-                justify-content: space-between;
             }
             .btn-group button {
-                flex: 1;
                 justify-content: center;
+                padding: 0.6rem 0.875rem;
+            }
+            #obfuscateBtn {
+                grid-column: span 2;
+                width: 100%;
+            }
+            .editor-body {
+                height: 300px;
             }
             .platform-checkboxes {
                 grid-template-columns: 1fr;
