@@ -2,128 +2,128 @@
 // Entrypoint is at the top for clarity. Scroll down to see the HTML/CSS template.
 
 export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+    async fetch(request, env, ctx) {
+        const url = new URL(request.url);
 
-    // 1. Handle CORS Preflight requests
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-          "Access-Control-Max-Age": "86400",
-        },
-      });
-    }
-
-    // 2. Serve the Obfuscation Proxy (POST /obfuscate)
-    if (url.pathname === "/obfuscate" && request.method === "POST") {
-      try {
-        const bodyText = await request.text();
-        let code = bodyText;
-        let platform = "";
-        let pythonVersion = "3.11";
-
-        // Support JSON format from the Web UI
-        const contentType = request.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const data = JSON.parse(bodyText);
-          code = data.code || "";
-          platform = data.platform || "";
-          pythonVersion = data.python || data.python_version || "3.11";
-        } else {
-          platform = url.searchParams.get("platform") || "";
-          pythonVersion = url.searchParams.get("python") || url.searchParams.get("python_version") || "3.11";
+        // 1. Handle CORS Preflight requests
+        if (request.method === "OPTIONS") {
+            return new Response(null, {
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    "Access-Control-Max-Age": "86400",
+                },
+            });
         }
 
-        if (!code || code.trim() === "") {
-          return new Response("Error: Python code is empty.", {
-            status: 400,
-            headers: {
-              "Content-Type": "text/plain; charset=utf-8",
-              "Access-Control-Allow-Origin": "*",
-            },
-          });
-        }
+        // 2. Serve the Obfuscation Proxy (POST /obfuscate)
+        if (url.pathname === "/obfuscate" && request.method === "POST") {
+            try {
+                const bodyText = await request.text();
+                let code = bodyText;
+                let platform = "";
+                let pythonVersion = "3.11";
 
-        // Get Koyeb Backend URL from Cloudflare Worker Environment Variables
-        const backendBase = env.KOYEB_BACKEND_URL;
-        if (!backendBase) {
-          return new Response(
-            "Worker Configuration Error: The environment variable 'KOYEB_BACKEND_URL' is missing. Please add it to your Cloudflare Worker environment settings.",
-            {
-              status: 500,
-              headers: {
-                "Content-Type": "text/plain; charset=utf-8",
-                "Access-Control-Allow-Origin": "*",
-              },
+                // Support JSON format from the Web UI
+                const contentType = request.headers.get("content-type") || "";
+                if (contentType.includes("application/json")) {
+                    const data = JSON.parse(bodyText);
+                    code = data.code || "";
+                    platform = data.platform || "";
+                    pythonVersion = data.python || data.python_version || "3.11";
+                } else {
+                    platform = url.searchParams.get("platform") || "";
+                    pythonVersion = url.searchParams.get("python") || url.searchParams.get("python_version") || "3.11";
+                }
+
+                if (!code || code.trim() === "") {
+                    return new Response("Error: Python code is empty.", {
+                        status: 400,
+                        headers: {
+                            "Content-Type": "text/plain; charset=utf-8",
+                            "Access-Control-Allow-Origin": "*",
+                        },
+                    });
+                }
+
+                // Get Koyeb Backend URL from Cloudflare Worker Environment Variables
+                const backendBase = env.KOYEB_BACKEND_URL;
+                if (!backendBase) {
+                    return new Response(
+                        "Worker Configuration Error: The environment variable 'KOYEB_BACKEND_URL' is missing. Please add it to your Cloudflare Worker environment settings.",
+                        {
+                            status: 500,
+                            headers: {
+                                "Content-Type": "text/plain; charset=utf-8",
+                                "Access-Control-Allow-Origin": "*",
+                            },
+                        }
+                    );
+                }
+
+                const targetUrl = new URL("/obfuscate", backendBase);
+                targetUrl.searchParams.set("format", "zip");
+                if (platform) {
+                    targetUrl.searchParams.set("platform", platform);
+                }
+                if (pythonVersion) {
+                    targetUrl.searchParams.set("python_version", pythonVersion);
+                }
+
+                // Fetch from Koyeb backend
+                const koyebResponse = await fetch(targetUrl.toString(), {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "text/plain",
+                    },
+                    body: code,
+                });
+
+                if (!koyebResponse.ok) {
+                    const errorMsg = await koyebResponse.text();
+                    return new Response(errorMsg, {
+                        status: koyebResponse.status,
+                        headers: {
+                            "Content-Type": "text/plain; charset=utf-8",
+                            "Access-Control-Allow-Origin": "*",
+                        },
+                    });
+                }
+
+                // Forward the generated zip stream back to the client
+                const zipBlob = await koyebResponse.arrayBuffer();
+                return new Response(zipBlob, {
+                    status: 200,
+                    headers: {
+                        "Content-Type": "application/zip",
+                        "Content-Disposition": 'attachment; filename="obfuscated.zip"',
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                });
+
+            } catch (err) {
+                return new Response(`Worker Internal Error: ${err.message}`, {
+                    status: 502,
+                    headers: {
+                        "Content-Type": "text/plain; charset=utf-8",
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                });
             }
-          );
         }
 
-        const targetUrl = new URL("/obfuscate", backendBase);
-        targetUrl.searchParams.set("format", "zip");
-        if (platform) {
-          targetUrl.searchParams.set("platform", platform);
-        }
-        if (pythonVersion) {
-          targetUrl.searchParams.set("python_version", pythonVersion);
-        }
-
-        // Fetch from Koyeb backend
-        const koyebResponse = await fetch(targetUrl.toString(), {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain",
-          },
-          body: code,
-        });
-
-        if (!koyebResponse.ok) {
-          const errorMsg = await koyebResponse.text();
-          return new Response(errorMsg, {
-            status: koyebResponse.status,
-            headers: {
-              "Content-Type": "text/plain; charset=utf-8",
-              "Access-Control-Allow-Origin": "*",
-            },
-          });
+        // 3. Serve Frontend Webpage on GET requests
+        if (request.method === "GET") {
+            return new Response(HTML_CONTENT, {
+                headers: {
+                    "Content-Type": "text/html; charset=utf-8",
+                },
+            });
         }
 
-        // Forward the generated zip stream back to the client
-        const zipBlob = await koyebResponse.arrayBuffer();
-        return new Response(zipBlob, {
-          status: 200,
-          headers: {
-            "Content-Type": "application/zip",
-            "Content-Disposition": 'attachment; filename="obfuscated.zip"',
-            "Access-Control-Allow-Origin": "*",
-          },
-        });
-
-      } catch (err) {
-        return new Response(`Worker Internal Error: ${err.message}`, {
-          status: 502,
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Access-Control-Allow-Origin": "*",
-          },
-        });
-      }
-    }
-
-    // 3. Serve Frontend Webpage on GET requests
-    if (request.method === "GET") {
-      return new Response(HTML_CONTENT, {
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-        },
-      });
-    }
-
-    return new Response("Not Found", { status: 404 });
-  },
+        return new Response("Not Found", { status: 404 });
+    },
 };
 
 // ==========================================
@@ -857,7 +857,7 @@ def add(a, b):
                 <!-- Loading State -->
                 <div class="status-loading" id="statusLoading">
                     <div class="spinner"></div>
-                    <p id="loadingText">正在提交到 Koyeb 服务器，正在使用 PyArmor 混淆代码中...</p>
+                    <p id="loadingText">正在提交到服务器，正在使用 PyArmor 混淆代码中...</p>
                 </div>
 
                 <!-- Success State -->
