@@ -33,9 +33,13 @@ WORKDIR /app
 COPY . .
 
 # Ensure pip is installed for all python versions and install pyarmor
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py -o get_pip.py && \
-    python3.8 get_pip.py && \
-    python3.9 get_pip.py && \
+RUN curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get_pip_38.py && \
+    python3.8 get_pip_38.py && \
+    rm get_pip_38.py && \
+    curl -sS https://bootstrap.pypa.io/pip/3.9/get-pip.py -o get_pip_39.py && \
+    python3.9 get_pip_39.py && \
+    rm get_pip_39.py && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py -o get_pip.py && \
     python3.10 get_pip.py && \
     python3.11 get_pip.py && \
     python3.12 get_pip.py && \
