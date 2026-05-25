@@ -23,6 +23,7 @@ export default {
         const bodyText = await request.text();
         let code = bodyText;
         let platform = "";
+        let pythonVersion = "3.11";
 
         // Support JSON format from the Web UI
         const contentType = request.headers.get("content-type") || "";
@@ -30,8 +31,10 @@ export default {
           const data = JSON.parse(bodyText);
           code = data.code || "";
           platform = data.platform || "";
+          pythonVersion = data.python || data.python_version || "3.11";
         } else {
           platform = url.searchParams.get("platform") || "";
+          pythonVersion = url.searchParams.get("python") || url.searchParams.get("python_version") || "3.11";
         }
 
         if (!code || code.trim() === "") {
@@ -63,6 +66,9 @@ export default {
         targetUrl.searchParams.set("format", "zip");
         if (platform) {
           targetUrl.searchParams.set("platform", platform);
+        }
+        if (pythonVersion) {
+          targetUrl.searchParams.set("python_version", pythonVersion);
         }
 
         // Fetch from Koyeb backend
@@ -456,7 +462,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
         .options-grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 1.5rem;
         }
 
@@ -550,6 +556,65 @@ const HTML_CONTENT = `<!DOCTYPE html>
             font-size: 0.8rem;
             color: #71717a;
             line-height: 1.4;
+        }
+
+        /* Radio button checkmark override */
+        .radio-container {
+            display: flex;
+            align-items: center;
+            position: relative;
+            padding-left: 1.75rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            user-select: none;
+            color: var(--text-main);
+        }
+
+        .radio-container input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .radiomark {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            height: 16px;
+            width: 16px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .radio-container:hover input ~ .radiomark {
+            border-color: rgba(124, 58, 237, 0.4);
+            background-color: rgba(124, 58, 237, 0.05);
+        }
+
+        .radio-container input:checked ~ .radiomark {
+            background-color: var(--accent-purple);
+            border-color: var(--accent-purple);
+        }
+
+        .radiomark:after {
+            content: "";
+            position: absolute;
+            display: none;
+            left: 5px;
+            top: 5px;
+            width: 6px;
+            height: 6px;
+            background-color: white;
+            border-radius: 50%;
+        }
+
+        .radio-container input:checked ~ .radiomark:after {
+            display: block;
         }
 
         /* Status Panels */
@@ -818,6 +883,42 @@ def add(a, b):
                 <h3>&#x2699;&#xFE0F; 编译参数</h3>
                 <div class="options-grid">
                     <div class="option-card">
+                        <label class="option-label">目标 Python 版本 (Target Python Version)</label>
+                        <div class="platform-checkboxes" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <label class="radio-container">
+                                <input type="radio" name="pythonVersion" value="3.8">
+                                <span class="radiomark"></span>
+                                Python 3.8
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="pythonVersion" value="3.9">
+                                <span class="radiomark"></span>
+                                Python 3.9
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="pythonVersion" value="3.10">
+                                <span class="radiomark"></span>
+                                Python 3.10
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="pythonVersion" value="3.11" checked>
+                                <span class="radiomark"></span>
+                                Python 3.11
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="pythonVersion" value="3.12">
+                                <span class="radiomark"></span>
+                                Python 3.12
+                            </label>
+                            <label class="radio-container">
+                                <input type="radio" name="pythonVersion" value="3.13">
+                                <span class="radiomark"></span>
+                                Python 3.13
+                            </label>
+                        </div>
+                        <small class="option-help">注意：混淆后的代码通常绑定到用于加密的 Python 次要版本 (Minor Version)。例如，用 Python 3.11 混淆的代码无法在 Python 3.10 或 3.13 等不同次要版本环境下直接运行。请选择目标运行环境对应的 Python 版本。</small>
+                    </div>
+                    <div class="option-card">
                         <label class="option-label">目标运行平台 (Target Platforms)</label>
                         <div class="platform-checkboxes">
                             <label class="checkbox-container">
@@ -926,6 +1027,10 @@ print("hello")
             const selectedCheckboxes = document.querySelectorAll('input[name="platform"]:checked');
             const platforms = Array.from(selectedCheckboxes).map(cb => cb.value).join(',');
 
+            // Get selected Python version
+            const selectedPythonRadio = document.querySelector('input[name="pythonVersion"]:checked');
+            const pythonVersion = selectedPythonRadio ? selectedPythonRadio.value : '3.11';
+
             // Disable button
             obfuscateBtn.disabled = true;
             const originalBtnText = obfuscateBtn.innerHTML;
@@ -947,7 +1052,8 @@ print("hello")
                     },
                     body: JSON.stringify({
                         code: code,
-                        platform: platforms
+                        platform: platforms,
+                        python: pythonVersion
                     })
                 });
 

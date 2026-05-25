@@ -33,12 +33,21 @@ async def obfuscate(
     platform: str = Query(
         None, description="Target platforms, e.g. windows.x86_64,linux.x86_64"
     ),
+    python_version: str = Query(
+        "3.11",
+        alias="python_version",
+        description="Target Python version, e.g. 3.8, 3.9, 3.10, 3.11, 3.12, 3.13",
+    ),
+    python: str = Query(
+        None, description="Alternative parameter name for Target Python version"
+    ),
 ):
     uid = str(uuid.uuid4())
     workdir = os.path.join(BASE_DIR, uid)
     os.makedirs(workdir, exist_ok=True)
 
     filename = "main.py"
+    target_py = python or python_version
 
     # 1. Parse Input: Handle multipart file upload or raw body
     content_type = request.headers.get("content-type", "")
@@ -54,6 +63,11 @@ async def obfuscate(
         input_path = os.path.join(workdir, filename)
         with open(input_path, "wb") as f:
             f.write(await uploaded_file.read())
+
+        # Check form data for python version
+        form_py = form.get("python") or form.get("python_version")
+        if form_py:
+            target_py = str(form_py)
     else:
         body = await request.body()
         if not body:
@@ -68,6 +82,9 @@ async def obfuscate(
                 data = json.loads(body)
                 code = data.get("code", "")
                 filename = data.get("filename", "main.py")
+                body_py = data.get("python") or data.get("python_version")
+                if body_py:
+                    target_py = str(body_py)
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid JSON format")
         else:
@@ -84,8 +101,49 @@ async def obfuscate(
         with open(input_path, "w", encoding="utf-8") as f:
             f.write(code)
 
-    # 2. Build and run the PyArmor command securely
-    cmd = ["pyarmor", "gen"]
+    # Validate target python version
+    import re
+
+    if not re.match(r"^(3\.8|3\.9|3\.10|3\.11|3\.12|3\.13)$", target_py):
+        target_py = "3.11"
+
+    # 2. Build and run the PyArmor command securely using the requested Python version
+    executable = "pyarmor"
+    cmd_args = ["gen"]
+
+    if target_py != "3.11" or os.name == "nt":
+        # Check if the requested python executable is available on the system
+        if os.name == "nt":
+            candidate = f"python{target_py}"
+            if shutil.which(candidate):
+                executable = candidate
+                cmd_args = ["-m", "pyarmor.cli", "gen"]
+            elif shutil.which("py"):
+                executable = "py"
+                cmd_args = [f"-{target_py}", "-m", "pyarmor.cli", "gen"]
+            else:
+                executable = "pyarmor"
+                cmd_args = ["gen"]
+        else:
+            candidate = f"python{target_py}"
+            if shutil.which(candidate):
+                executable = candidate
+                cmd_args = ["-m", "pyarmor.cli", "gen"]
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Python version {target_py} is not installed on the server. Please install it or use the default 3.11.",
+                )
+    else:
+        # Standard default command or python3.11
+        if shutil.which("python3.11"):
+            executable = "python3.11"
+            cmd_args = ["-m", "pyarmor.cli", "gen"]
+        else:
+            executable = "pyarmor"
+            cmd_args = ["gen"]
+
+    cmd = [executable] + cmd_args
     if platform:
         cmd.extend(["--platform", platform])
     cmd.append(filename)
